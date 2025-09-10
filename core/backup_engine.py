@@ -74,7 +74,7 @@ class BackupEngine:
         except Exception as e:
             return False, str(e)
     
-    def start_backup(self, folder_path, scan_results, progress_callback=None):
+    def start_backup(self, folder_path, scan_results, custom_backup_name, progress_callback=None):
         """Start the backup process"""
         try:
             # Step 1: Authenticate
@@ -83,12 +83,11 @@ class BackupEngine:
             
             self.authenticate()
             
-            # Step 2: Create main backup folder
+            # Step 2: Create main backup folder with custom name
             if progress_callback:
-                progress_callback(0.1, "📁 Creating main backup folder...")
+                progress_callback(0.1, f"📁 Creating backup folder: {custom_backup_name}")
             
-            backup_folder_name = f"Backup_{Path(folder_path).name}"
-            main_folder_id = self.create_folder_in_drive(backup_folder_name)
+            main_folder_id = self.create_folder_in_drive(custom_backup_name)
             
             # Step 3: Create folder structure
             if progress_callback:

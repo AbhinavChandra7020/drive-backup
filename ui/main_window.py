@@ -1,8 +1,10 @@
 import customtkinter as ctk
 from tkinter import filedialog
 import threading
-from core.file_scanner import FileScanner
+import datetime
+from core import FileScanner
 from core import BackupEngine
+
 from ui.progress_widget import ProgressWidget
 
 class MainWindow:
@@ -22,6 +24,7 @@ class MainWindow:
         """Initialize all UI components"""
         self.create_header()
         self.create_folder_selection()
+        self.create_backup_name_section()
         self.create_progress_section()
         self.create_backup_button()
         self.create_results_section()
@@ -55,6 +58,24 @@ class MainWindow:
         
         self.folder_label = ctk.CTkLabel(self.source_frame, text="No folder selected")
         self.folder_label.pack(pady=5)
+    
+    def create_backup_name_section(self):
+        """Create the backup name input section"""
+        self.name_frame = ctk.CTkFrame(self.root)
+        self.name_frame.pack(pady=10, padx=40, fill="x")
+        
+        ctk.CTkLabel(
+            self.name_frame, 
+            text="Backup name (optional):", 
+            font=ctk.CTkFont(size=16)
+        ).pack(pady=(10,5))
+        
+        self.backup_name_entry = ctk.CTkEntry(
+            self.name_frame,
+            placeholder_text="Enter custom backup name or leave empty for auto-generated",
+            width=400
+        )
+        self.backup_name_entry.pack(pady=(0,10))
     
     def create_progress_section(self):
         """Create the progress bar section"""
@@ -92,6 +113,27 @@ class MainWindow:
             self.folder_label.configure(text=f"Selected: {folder}")
             # Reset backup button when new folder selected
             self.backup_button.configure(text="Start Scan", command=self.start_scan)
+            
+            # Generate default backup name based on folder name
+            folder_name = folder.split('/')[-1] or folder.split('\\')[-1]
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            default_name = f"{folder_name}_backup_{timestamp}"
+            self.backup_name_entry.delete(0, 'end')
+            self.backup_name_entry.insert(0, default_name)
+    
+    def get_backup_name(self):
+        """Get the backup name from entry or generate default"""
+        custom_name = self.backup_name_entry.get().strip()
+        if custom_name:
+            return custom_name
+        else:
+            # Generate default name
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            if self.selected_folder:
+                folder_name = self.selected_folder.split('/')[-1] or self.selected_folder.split('\\')[-1]
+                return f"{folder_name}_backup_{timestamp}"
+            else:
+                return f"Backup_{timestamp}"
     
     def show_results(self, folders_found, files_count, total_size):
         """Show scan results and enable backup"""
@@ -127,7 +169,6 @@ class MainWindow:
     
     def scan_worker(self):
         """Worker thread for scanning"""
-        
         scanner = FileScanner(self.selected_folder)
         
         def progress_callback(progress, message):
@@ -138,16 +179,19 @@ class MainWindow:
     
     def backup_worker(self):
         """Worker thread for backup process"""
-        
         backup_engine = BackupEngine()
         
         def progress_callback(progress, message):
             self.root.after(0, self.progress_widget.update, progress, message)
         
         try:
+            # Get the backup name
+            backup_name = self.get_backup_name()
+            
             success, message = backup_engine.start_backup(
                 self.selected_folder, 
                 self.scan_results,
+                backup_name,  # Fixed: Added the missing custom_backup_name parameter
                 progress_callback
             )
             
@@ -177,9 +221,18 @@ class MainWindow:
             self.status_text.insert("end", "❌ No scan results available. Please scan first.\n")
             return
             
+        # Validate backup name
+        backup_name = self.get_backup_name()
+        if not backup_name:
+            self.status_text.insert("end", "❌ Please provide a valid backup name.\n")
+            return
+            
         self.progress_widget.show(after_widget=self.backup_button)
         self.progress_widget.reset()
         self.backup_button.configure(state="disabled", text="Backing up...")
+        
+        # Show backup name in status
+        self.status_text.insert("end", f"\n🚀 Starting backup: '{backup_name}'\n")
         
         # Start backup in background thread
         backup_thread = threading.Thread(target=self.backup_worker, daemon=True)
@@ -193,7 +246,7 @@ class MainWindow:
             return
         
         self.status_text.delete("1.0", "end")
-        self.progress_widget.show(after_widget=self.source_frame)
+        self.progress_widget.show(after_widget=self.name_frame)
         self.progress_widget.reset()
         
         self.backup_button.configure(state="disabled", text="Scanning...")
@@ -206,6 +259,8 @@ class MainWindow:
         self.scan_results = None
         self.status_text.delete("1.0", "end")
         self.backup_button.configure(text="Start Scan", command=self.start_scan, state="normal")
+        # Clear the backup name entry
+        self.backup_name_entry.delete(0, 'end')
         
     def run(self):
         self.root.mainloop()
