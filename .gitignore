@@ -2,3 +2,5 @@
 credentials.json
 venv
 settings.yaml
+token.json
+__pycache__/
